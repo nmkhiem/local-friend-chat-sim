@@ -34,7 +34,7 @@ curl_json GET /councils >/dev/null
 echo "5. create research post"
 created="$(
   curl_json POST /posts \
-    '{"content":"Smoke test: critique world models for healthcare research. What assumptions are weak?","council_id":"research"}'
+    '{"content":"Critique world models for healthcare research. What assumptions are weak?","council_id":"research"}'
 )"
 post_id="$(python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])' <<<"$created")"
 

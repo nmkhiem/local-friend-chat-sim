@@ -7,8 +7,8 @@ import httpx
 
 
 DEFAULT_MODEL_OPTIONS = (
-    "llama3.2:1b",
     "llama3.2:3b",
+    "llama3.2:1b",
     "llama3.1",
     "mistral",
     "qwen2.5",
@@ -16,11 +16,15 @@ DEFAULT_MODEL_OPTIONS = (
 )
 
 
+class OllamaError(RuntimeError):
+    pass
+
+
 class OllamaClient:
     def __init__(self) -> None:
         self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
         self.model = os.getenv("OLLAMA_MODEL", "llama3.1")
-        self.timeout = float(os.getenv("OLLAMA_TIMEOUT", "8"))
+        self.timeout = float(os.getenv("OLLAMA_TIMEOUT", "120"))
 
     def set_model(self, model: str) -> None:
         model = model.strip()
@@ -71,25 +75,52 @@ class OllamaClient:
             "models": models,
         }
 
-    async def generate(self, prompt: str) -> str | None:
-        payload = {"model": self.model, "prompt": prompt, "stream": False, "format": "json"}
+    async def generate(self, prompt: str) -> str:
+        model = await self._generation_model()
+        payload = {"model": model, "prompt": prompt, "stream": False, "format": "json"}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(f"{self.base_url}/api/generate", json=payload)
                 response.raise_for_status()
-        except httpx.HTTPError:
-            return None
+        except httpx.TimeoutException as exc:
+            raise OllamaError(f"Ollama generation timed out for model '{model}' after {self.timeout:g}s.") from exc
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:240].strip()
+            message = f"Ollama generation failed for model '{model}' with HTTP {exc.response.status_code}."
+            if detail:
+                message = f"{message} {detail}"
+            raise OllamaError(message) from exc
+        except httpx.HTTPError as exc:
+            raise OllamaError(f"Ollama generation failed for model '{model}': {exc}") from exc
 
         try:
             body = response.json()
-        except ValueError:
-            return None
+        except ValueError as exc:
+            raise OllamaError("Ollama returned a non-JSON response.") from exc
 
         text = body.get("response")
         if not isinstance(text, str):
-            return None
+            raise OllamaError("Ollama response did not include text.")
 
         return text.strip().strip('"')
+
+    async def _generation_model(self) -> str:
+        installed = await self._installed_models()
+        if installed is None:
+            raise OllamaError(f"Ollama is not reachable at {self.base_url}.")
+        if not installed:
+            raise OllamaError("No Ollama models are installed.")
+        if self.model in installed:
+            return self.model
+
+        configured = self._configured_model_options()
+        for model in configured:
+            if model in installed:
+                self.model = model
+                return model
+
+        self.model = sorted(installed)[0]
+        return self.model
 
     async def _installed_models(self) -> dict[str, dict[str, Any]] | None:
         try:

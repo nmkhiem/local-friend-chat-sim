@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection, init_db, row_to_dict
-from ollama_client import OllamaClient
+from ollama_client import OllamaClient, OllamaError
 from personas import Council, DEFAULT_COUNCILS_BY_ID, DEFAULT_PERSONAS_BY_ID, Persona
 from schemas import (
     CommentOut,
@@ -23,6 +23,7 @@ from schemas import (
     PostOut,
 )
 from simulator import (
+    GenerationError,
     generate_comment_batch,
     generate_discussion_summary,
     generate_memory_updates,
@@ -346,15 +347,19 @@ async def simulate_comments(post_id: int) -> list[dict[str, Any]]:
     if not personas:
         raise HTTPException(status_code=400, detail="The selected council has no active personas.")
 
-    generated_comments = await generate_comment_batch(
-        ollama,
-        council,
-        personas,
-        post["content"],
-        post["topic_summary"],
-    )
+    try:
+        generated_comments = await generate_comment_batch(
+            ollama,
+            council,
+            personas,
+            post["content"],
+            post["topic_summary"],
+        )
+    except (GenerationError, OllamaError) as exc:
+        raise _generation_http_error(exc) from exc
+
     created = _store_comments(post_id, generated_comments)
-    await _update_summary_for_post(post_id)
+    await _try_update_summary_for_post(post_id)
     return created
 
 
@@ -375,16 +380,20 @@ async def simulate_replies(post_id: int) -> list[dict[str, Any]]:
         raise HTTPException(status_code=400, detail="The selected council has no active personas.")
 
     reply_tasks = _reply_tasks(post_id, personas, existing_comments)
-    generated_replies = await generate_reply_batch(
-        ollama,
-        context["council"],
-        personas,
-        post["content"],
-        _comments_for_prompt(existing_comments),
-        reply_tasks,
-    )
+    try:
+        generated_replies = await generate_reply_batch(
+            ollama,
+            context["council"],
+            personas,
+            post["content"],
+            _comments_for_prompt(existing_comments),
+            reply_tasks,
+        )
+    except (GenerationError, OllamaError) as exc:
+        raise _generation_http_error(exc) from exc
+
     created = _store_comments(post_id, generated_replies)
-    await _update_summary_for_post(post_id)
+    await _try_update_summary_for_post(post_id)
     await _try_update_memories(post_id, {item["persona_id"] for item in generated_replies})
     return created
 
@@ -407,18 +416,22 @@ async def continue_discussion(post_id: int) -> dict[str, Any]:
 
     target_pool = existing_comments[-max(4, len(personas) * 2) :]
     reply_tasks = _reply_tasks(post_id + len(existing_comments), personas, target_pool)
-    generated_replies = await generate_reply_batch(
-        ollama,
-        context["council"],
-        personas,
-        post["content"],
-        _comments_for_prompt(existing_comments),
-        reply_tasks,
-    )
+    try:
+        generated_replies = await generate_reply_batch(
+            ollama,
+            context["council"],
+            personas,
+            post["content"],
+            _comments_for_prompt(existing_comments),
+            reply_tasks,
+        )
+    except (GenerationError, OllamaError) as exc:
+        raise _generation_http_error(exc) from exc
+
     unique_replies = _dedupe_generated(generated_replies, existing_comments)
     if unique_replies:
         _store_comments(post_id, unique_replies)
-        await _update_summary_for_post(post_id)
+        await _try_update_summary_for_post(post_id)
         await _try_update_memories(post_id, {item["persona_id"] for item in unique_replies})
 
     return _post_detail(post_id)
@@ -438,6 +451,10 @@ def _payload_updates(payload: Any, skip: set[str] | None = None) -> dict[str, An
         for key, value in payload.model_dump(exclude_unset=True).items()
         if key not in skip and value is not None
     }
+
+
+def _generation_http_error(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=502, detail=str(exc))
 
 
 def _unique_nonempty(values: list[str]) -> list[str]:
@@ -744,6 +761,13 @@ async def _update_summary_for_post(post_id: int) -> None:
         )
 
 
+async def _try_update_summary_for_post(post_id: int) -> None:
+    try:
+        await _update_summary_for_post(post_id)
+    except (GenerationError, OllamaError):
+        return
+
+
 async def _try_update_memories(post_id: int, participating_persona_ids: set[str]) -> None:
     try:
         await _update_memories(post_id, participating_persona_ids)
@@ -857,7 +881,7 @@ def _thread_markdown(detail: dict[str, Any]) -> str:
             "",
             f"- Created at: {detail['created_at']}",
             f"- Council: {detail['council_name']}",
-            f"- Model: {detail.get('model') or 'fallback/unspecified'}",
+            f"- Model: {detail.get('model') or 'unspecified'}",
         ]
     )
     return "\n".join(lines).rstrip() + "\n"

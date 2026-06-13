@@ -1,6 +1,6 @@
 # Local Friend Chat Simulator
 
-A local-first council simulator for trying ideas against small simulated groups. The app stores everything in SQLite, uses editable personas and reusable councils, and optionally calls an Ollama-compatible local model. If Ollama is unavailable or generation fails, the API returns deterministic fallback comments, replies, summaries, and memory updates.
+A local-first council simulator for trying ideas against small simulated groups. The app stores everything in SQLite, uses editable personas and reusable councils, and calls an Ollama-compatible local model for generation. If Ollama is unavailable or generation returns invalid JSON, the API returns an error instead of synthetic template text.
 
 ## What v0.2 Adds
 
@@ -87,12 +87,12 @@ Default councils are seeded idempotently on startup. Existing user edits are not
 
 Each persona can have one concise memory row in `persona_memories`. Memory is included in future prompts for that persona, updated after reply waves and continued discussions, and capped to about 1000 characters. This is simple summary memory, not vector search.
 
-## Optional Ollama
+## Ollama
 
 Install and run Ollama locally, then pull a model:
 
 ```bash
-ollama pull llama3.2:1b
+ollama pull llama3.2:3b
 ollama serve
 ```
 
@@ -101,10 +101,10 @@ The backend uses:
 - `OLLAMA_BASE_URL`, default `http://localhost:11434`
 - `OLLAMA_MODEL`, default `llama3.1`
 - `OLLAMA_MODEL_OPTIONS`, optional comma-separated list shown in the UI as model choices
-- `OLLAMA_TIMEOUT`, default `8`
+- `OLLAMA_TIMEOUT`, default `120`
 - `OLLAMA_PULL_TIMEOUT`, default `600`
 
-The model switcher can display installed models, configured missing models, switch the active model, and optionally trigger an Ollama pull. Do not pull large models unless you actually want them locally.
+The model switcher can display installed models, configured missing models, switch the active model, and optionally trigger an Ollama pull. If `OLLAMA_MODEL` is not installed, the backend auto-selects the first installed model from the configured options. Do not pull large models unless you actually want them locally.
 
 ## API
 
@@ -138,4 +138,4 @@ The model switcher can display installed models, configured missing models, swit
 - Persona memory is a short summary, not vector retrieval or durable fact management.
 - Personas are simulated and can be inconsistent, especially with small local models.
 - Local model speed and quality depend on hardware and the selected Ollama model.
-- Deterministic fallback keeps the app usable offline but is intentionally simple.
+- Generation requires Ollama to be reachable and return valid JSON; there is no synthetic template text path.

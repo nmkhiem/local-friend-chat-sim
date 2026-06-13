@@ -6,8 +6,8 @@ The app is intentionally local and small:
 - `frontend/` is a React + Vite workspace that calls the local API.
 - `backend/personas.py` contains seed definitions only.
 - SQLite stores editable personas, councils, memories, posts, and comments.
-- `backend/simulator.py` owns prompt construction, JSON validation, fallback generation, summaries, and memory updates.
-- `backend/ollama_client.py` is the optional Ollama-compatible HTTP client.
+- `backend/simulator.py` owns prompt construction, JSON validation, summaries, and memory updates.
+- `backend/ollama_client.py` is the required Ollama-compatible HTTP client for generation.
 
 ## SQLite Model
 
@@ -30,7 +30,7 @@ Generation follows a read, close, generate, write pattern:
 2. Close the SQLite connection.
 3. Call Ollama with strict JSON prompts.
 4. Validate JSON shape, persona IDs, parent comment IDs, and content length.
-5. Fall back deterministically if Ollama fails or returns invalid JSON.
+5. Return an HTTP error if Ollama fails or returns invalid JSON.
 6. Open a new SQLite connection and write comments, replies, summaries, or memory updates.
 
 SQLite connections use a timeout, `PRAGMA busy_timeout`, foreign keys, and WAL mode. No connection is intentionally held while waiting on Ollama.
@@ -83,6 +83,6 @@ The send and continue flows use an in-flight ref plus disabled controls to preve
 
 Destructive UI actions use browser confirmation before calling local delete/reset endpoints. Thread deletion relies on SQLite cascading deletes for comments.
 
-## Fallback Behavior
+## Generation Errors
 
-If Ollama is offline, the configured model is missing, a request times out, or JSON validation fails, simulator functions return deterministic fallback content. Fallbacks are council-aware enough to keep the app usable without a model, but they are simpler and less varied than local model output.
+If Ollama is offline, no model is installed, a request times out, or JSON validation fails, generation endpoints return an error instead of synthetic template content. If `OLLAMA_MODEL` is not installed but another configured model is installed, the backend auto-selects the installed model before generating.
