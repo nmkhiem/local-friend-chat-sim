@@ -124,6 +124,19 @@ select:focus {
   gap: 12px;
 }
 
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inspector-header strong {
+  display: block;
+  color: #1f2937;
+  font-size: 0.98rem;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #64748b;
@@ -150,7 +163,8 @@ h1 {
 }
 
 .icon-button:hover:not(:disabled),
-.ghost-button:hover:not(:disabled) {
+.ghost-button:hover:not(:disabled),
+.section-toggle:hover:not(:disabled) {
   border-color: #94a3b8;
   background: #f1f5f9;
 }
@@ -180,6 +194,16 @@ h1 {
 
 .section-title {
   gap: 8px;
+}
+
+.section-toggle {
+  width: 30px;
+  min-height: 30px;
+  flex: 0 0 30px;
+  border-color: #d6dee8;
+  padding: 0;
+  color: #475569;
+  background: #f8fafc;
 }
 
 .council-note {
@@ -296,8 +320,12 @@ h1 {
   background: #fff;
 }
 
-.mobile-settings {
+.panel-open-button {
   display: none;
+}
+
+.panel-open-button.visible {
+  display: inline-flex;
 }
 
 .online-cluster {
@@ -766,8 +794,12 @@ h1 {
     max-height: none;
   }
 
-  .mobile-settings {
+  .panel-open-button {
     display: inline-flex;
+  }
+
+  .panel-open-button:not(.visible) {
+    display: none;
   }
 }
 

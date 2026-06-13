@@ -15,6 +15,7 @@ import {
   Settings,
   Sparkles,
   UsersRound,
+  X,
 } from 'lucide-react';
 import './styles.css';
 
@@ -451,10 +452,10 @@ function App() {
               {copyState === 'copied' ? 'Copied' : 'Markdown'}
             </button>
             <button
-              className="icon-button mobile-settings"
-              onClick={() => setSettingsOpen((current) => !current)}
-              aria-label="Toggle settings"
-              title="Settings"
+              className={`icon-button panel-open-button ${settingsOpen ? '' : 'visible'}`}
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings panel"
+              title="Open settings panel"
             >
               <PanelRightOpen size={18} />
             </button>
@@ -530,6 +531,7 @@ function App() {
         selectedCouncil={selectedCouncil}
         selectedPersonaId={selectedPersonaId}
         onCouncilChange={updateCouncilDraft}
+        onClose={() => setSettingsOpen(false)}
         onPersonaChange={updatePersonaDraft}
         onPersonaSelect={setSelectedPersonaId}
         onSaveCouncil={saveCouncil}
@@ -606,6 +608,7 @@ function SettingsPanel({
   selectedCouncil,
   selectedPersonaId,
   onCouncilChange,
+  onClose,
   onPersonaChange,
   onPersonaSelect,
   onSaveCouncil,
@@ -614,6 +617,21 @@ function SettingsPanel({
 }) {
   return (
     <aside className={`inspector ${isOpen ? 'open' : ''}`}>
+      <div className="inspector-header">
+        <div>
+          <p className="eyebrow">settings</p>
+          <strong>Personas & councils</strong>
+        </div>
+        <button
+          className="section-toggle"
+          onClick={onClose}
+          aria-label="Close settings panel"
+          title="Close settings panel"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
       <section className="inspector-section">
         <div className="section-title">
           <Brain size={16} />
