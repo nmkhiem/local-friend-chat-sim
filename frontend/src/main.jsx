@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Cpu, MessageCircle, RefreshCw, Send, Sparkles, UsersRound } from 'lucide-react';
+import { Cpu, MessageCircle, Send, Sparkles, UsersRound } from 'lucide-react';
 import './styles.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -21,16 +21,8 @@ function App() {
   const [modelLoading, setModelLoading] = useState(false);
   const inFlightRef = useRef(false);
 
-  const hasComments = useMemo(() => Boolean(post?.comments?.length), [post]);
   const isBusy = Boolean(loading);
-  const availableModels = useMemo(
-    () => modelStatus?.models?.filter((model) => model.installed) || [],
-    [modelStatus],
-  );
-  const missingModels = useMemo(
-    () => modelStatus?.models?.filter((model) => !model.installed) || [],
-    [modelStatus],
-  );
+  const modelOptions = modelStatus?.models || [];
 
   useEffect(() => {
     refreshModels();
@@ -67,10 +59,18 @@ function App() {
 
   async function selectModel(modelName) {
     if (!modelName || modelName === modelStatus?.current_model) return;
+    const selected = modelOptions.find((model) => model.name === modelName);
+    const shouldDownload =
+      selected &&
+      !selected.installed &&
+      window.confirm(`${modelName} chưa được tải. Tải model này bằng Ollama bây giờ?`);
+
+    if (selected && !selected.installed && !shouldDownload) return;
+
     setModelLoading(true);
     setError('');
     try {
-      const status = await request('/models', {
+      const status = await request(selected?.installed ? '/models' : '/models/pull', {
         method: 'POST',
         body: JSON.stringify({ model: modelName }),
       });
@@ -96,22 +96,12 @@ function App() {
       });
       setDraft('');
       await refreshPost(created.id);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      inFlightRef.current = false;
-      setLoading('');
-    }
-  }
-
-  async function simulate(path, mode) {
-    if (!post || inFlightRef.current) return;
-    inFlightRef.current = true;
-    setLoading(mode);
-    setError('');
-    try {
-      await request(`/posts/${post.id}/${path}`, { method: 'POST' });
-      await refreshPost(post.id);
+      setLoading('comments');
+      await request(`/posts/${created.id}/simulate`, { method: 'POST' });
+      await refreshPost(created.id);
+      setLoading('replies');
+      await request(`/posts/${created.id}/simulate-reply`, { method: 'POST' });
+      await refreshPost(created.id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -128,72 +118,48 @@ function App() {
           <h1>Local Friend Chat Simulator</h1>
         </div>
 
-        <section className="model-panel" aria-label="Ollama model">
-          <div className="model-heading">
-            <Cpu size={18} />
-            <strong>{modelStatus?.current_model || 'Model'}</strong>
-            <span className={modelStatus?.connected ? 'status-ok' : 'status-missing'}>
-              {!modelStatus ? 'Checking...' : modelStatus.connected ? 'Ollama connected' : 'Ollama offline'}
-            </span>
-            <button
-              className="icon-button"
-              onClick={refreshModels}
-              disabled={modelLoading || isBusy}
-              title="Refresh models"
-              aria-label="Refresh models"
-            >
-              <RefreshCw size={16} />
-            </button>
-          </div>
+        <div className="composer-box">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Share a thought with your simulated friend group..."
+            rows={5}
+          />
 
-          <select
-            value={modelStatus?.current_model || ''}
-            onChange={(event) => selectModel(event.target.value)}
-            disabled={modelLoading || isBusy || availableModels.length === 0}
-          >
-            {!modelStatus?.current_model && <option value="">Loading models...</option>}
-            {modelStatus?.current_model && !availableModels.some((model) => model.name === modelStatus.current_model) && (
-              <option value={modelStatus.current_model}>{modelStatus.current_model} (not downloaded)</option>
-            )}
-            {availableModels.map((model) => (
-              <option key={model.name} value={model.name}>
-                {model.name}
-              </option>
-            ))}
-          </select>
+          <div className="actions">
+            <div className="send-actions">
+              <div className="model-switcher" aria-label="Ollama model switcher">
+                <Cpu size={15} />
+                <select
+                  value={modelStatus?.current_model || ''}
+                  onChange={(event) => selectModel(event.target.value)}
+                  disabled={modelLoading || isBusy || modelOptions.length === 0}
+                  title={
+                    !modelStatus
+                      ? 'Checking Ollama models'
+                      : modelStatus.connected
+                        ? 'Switch Ollama model'
+                        : 'Ollama offline'
+                  }
+                >
+                  {!modelStatus?.current_model && <option value="">Model</option>}
+                  {modelOptions.map((model) => (
+                    <option
+                      key={model.name}
+                      value={model.name}
+                      className={model.installed ? 'model-option-ready' : 'model-option-missing'}
+                    >
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="model-lists">
-            <div>
-              <span>Available</span>
-              <p>{availableModels.length ? availableModels.map((model) => model.name).join(', ') : 'None'}</p>
-            </div>
-            <div>
-              <span>Not downloaded</span>
-              <p>{missingModels.length ? missingModels.map((model) => model.name).join(', ') : 'None'}</p>
+              <button className="send-button" onClick={sharePost} disabled={isBusy || !draft.trim()} aria-label="Share">
+                {isBusy ? <Sparkles size={18} /> : <Send size={18} />}
+              </button>
             </div>
           </div>
-        </section>
-
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Share a thought with your simulated friend group..."
-          rows={5}
-        />
-
-        <div className="actions">
-          <button onClick={sharePost} disabled={isBusy || !draft.trim()}>
-            <Send size={18} />
-            {loading === 'share' ? 'Sharing...' : 'Share'}
-          </button>
-          <button onClick={() => simulate('simulate', 'comments')} disabled={!post || isBusy}>
-            <Sparkles size={18} />
-            {loading === 'comments' ? 'Simulating comments...' : 'Simulate comments'}
-          </button>
-          <button onClick={() => simulate('simulate-reply', 'replies')} disabled={!hasComments || isBusy}>
-            <RefreshCw size={18} />
-            {loading === 'replies' ? 'Simulating replies...' : 'Simulate replies'}
-          </button>
         </div>
 
         {error && <p className="error">{error}</p>}

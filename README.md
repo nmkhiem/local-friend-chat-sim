@@ -60,6 +60,7 @@ The backend uses:
 - `OLLAMA_MODEL`, default `llama3.1`
 - `OLLAMA_MODEL_OPTIONS`, optional comma-separated list shown in the UI as model choices
 - `OLLAMA_TIMEOUT`, default `8`
+- `OLLAMA_PULL_TIMEOUT`, default `600`
 
 Without Ollama, the same endpoints continue to work with deterministic fallback responses.
 
@@ -78,6 +79,7 @@ The UI can display downloaded Ollama models, show configured models that are not
 - `GET /health`
 - `GET /models`
 - `POST /models`
+- `POST /models/pull`
 - `POST /posts`
 - `GET /posts`
 - `GET /posts/{post_id}`

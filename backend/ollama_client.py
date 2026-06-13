@@ -28,11 +28,33 @@ class OllamaClient:
             raise ValueError("Model name is required.")
         self.model = model
 
+    async def pull_model(self, model: str) -> bool:
+        model = model.strip()
+        if not model:
+            raise ValueError("Model name is required.")
+
+        timeout = httpx.Timeout(float(os.getenv("OLLAMA_PULL_TIMEOUT", "600")), connect=5)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/pull",
+                    json={"name": model, "stream": False},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError:
+            return False
+
+        self.model = model
+        return True
+
     async def model_status(self) -> dict[str, Any]:
         installed = await self._installed_models()
         configured = self._configured_model_options()
         installed_models = installed or {}
-        names = sorted({*configured, *installed_models.keys()})
+        names = sorted(
+            {*configured, *installed_models.keys()},
+            key=lambda name: (name not in installed_models, name),
+        )
         models = [
             {
                 "name": name,

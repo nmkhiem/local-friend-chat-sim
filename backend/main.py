@@ -57,6 +57,18 @@ async def select_model(payload: ModelSelect) -> dict[str, Any]:
     return await ollama.model_status()
 
 
+@app.post("/models/pull")
+async def pull_model(payload: ModelSelect) -> dict[str, Any]:
+    try:
+        pulled = await ollama.pull_model(payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not pulled:
+        raise HTTPException(status_code=502, detail="Could not download model from Ollama.")
+    return await ollama.model_status()
+
+
 @app.post("/posts", response_model=PostOut)
 def create_post(payload: PostCreate) -> dict[str, Any]:
     content = payload.content.strip()

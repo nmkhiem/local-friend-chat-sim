@@ -50,26 +50,25 @@ h1 {
 
 textarea {
   width: 100%;
-  min-height: 150px;
+  min-height: 132px;
   resize: vertical;
-  border: 1px solid #d4d0c8;
-  border-radius: 8px;
-  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  padding: 18px 16px 8px;
   color: #202124;
-  background: #fffdfa;
+  background: transparent;
   line-height: 1.5;
 }
 
 textarea:focus {
-  border-color: #386641;
-  outline: 3px solid rgba(56, 102, 65, 0.16);
+  outline: none;
 }
 
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 10px 10px;
 }
 
 button {
@@ -84,16 +83,6 @@ button {
   color: #fff;
   background: #202124;
   cursor: pointer;
-}
-
-.actions > button:nth-child(2) {
-  border-color: #386641;
-  background: #386641;
-}
-
-.actions > button:nth-child(3) {
-  border-color: #9a3412;
-  background: #9a3412;
 }
 
 button:disabled {
@@ -111,53 +100,12 @@ button:disabled {
   background: #fee2e2;
 }
 
-.model-panel {
-  display: grid;
-  gap: 10px;
-  border: 1px solid #d4d0c8;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  padding: 14px;
-  background: #fffdfa;
-}
-
-.model-heading {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.model-heading strong {
+.composer-box {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.status-ok,
-.status-missing {
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.status-ok {
-  color: #166534;
-  background: #dcfce7;
-}
-
-.status-missing {
-  color: #7f1d1d;
-  background: #fee2e2;
-}
-
-.icon-button {
-  min-height: 34px;
-  width: 34px;
-  padding: 0;
-  color: #202124;
-  background: #f7f4ef;
+  border: 1px solid #d4d0c8;
+  border-radius: 14px;
+  background: #fffdfa;
+  box-shadow: 0 14px 44px rgba(32, 33, 36, 0.08);
 }
 
 select {
@@ -168,28 +116,6 @@ select {
   padding: 0 10px;
   color: #202124;
   background: #fff;
-}
-
-.model-lists {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.model-lists span {
-  display: block;
-  margin-bottom: 4px;
-  color: #6b7280;
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.model-lists p {
-  margin: 0;
-  color: #202124;
-  font-size: 0.9rem;
-  line-height: 1.35;
 }
 
 .thread {
@@ -220,10 +146,10 @@ select {
 }
 
 .chat-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   border-bottom: 1px solid #e6dfd5;
   padding: 14px 16px;
   background: #fff7e8;
@@ -267,6 +193,65 @@ select {
 
 .online-cluster .avatar:first-child {
   margin-left: 0;
+}
+
+.model-switcher {
+  display: inline-grid;
+  grid-template-columns: auto minmax(74px, 106px);
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(32, 33, 36, 0.12);
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 5px 0 9px;
+  color: rgba(32, 33, 36, 0.68);
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 8px 24px rgba(32, 33, 36, 0.07);
+  backdrop-filter: blur(14px);
+}
+
+.model-switcher select {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px 0 0;
+  color: rgba(32, 33, 36, 0.82);
+  background: transparent;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.model-switcher select:disabled {
+  color: #8a8177;
+}
+
+.model-option-ready {
+  color: #202124;
+}
+
+.model-option-missing {
+  color: #9ca3af;
+}
+
+.send-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.send-actions {
+  justify-content: flex-end;
+}
+
+.send-button {
+  width: 38px;
+  min-height: 38px;
+  border-color: #202124;
+  border-radius: 999px;
+  padding: 0;
+  background: #202124;
 }
 
 .chat-messages {
@@ -503,10 +488,23 @@ select {
   }
 
   .chat-header {
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 
-  .model-lists {
-    grid-template-columns: 1fr;
+  .online-cluster {
+    justify-self: end;
+  }
+
+  textarea {
+    padding: 16px 14px 8px;
+  }
+
+  .send-actions {
+    justify-content: flex-end;
+  }
+
+  .model-switcher {
+    grid-template-columns: auto minmax(72px, 100px);
   }
 }
