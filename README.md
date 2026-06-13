@@ -41,6 +41,18 @@ curl -X POST http://localhost:8000/posts \
   -d '{"content":"I want to explore world models for healthcare research. What are the weak assumptions?", "council_id":"research"}'
 ```
 
+Smoke test the v0.2 backend flow after the server is running:
+
+```bash
+./scripts/smoke_backend.sh
+```
+
+To target another backend URL:
+
+```bash
+API_BASE_URL=http://localhost:8000 ./scripts/smoke_backend.sh
+```
+
 ## Frontend Setup
 
 ```bash
