@@ -107,7 +107,29 @@ The backend uses:
 
 The model switcher can display installed models, configured missing models, switch the active model, and optionally trigger an Ollama pull. If `OLLAMA_MODEL` is not installed, the backend auto-selects the first installed model from the configured options. Do not pull large models unless you actually want them locally.
 
-## API Key Provider
+## Groq API Provider
+
+Groq is supported as a dedicated provider through its OpenAI-compatible chat completions API:
+
+```bash
+cd backend
+source .venv/bin/activate
+MODEL_PROVIDER=groq \
+GROQ_API_KEY=gsk-your-key \
+GROQ_MODEL=llama-3.3-70b-versatile \
+uvicorn main:app --reload
+```
+
+Supported Groq settings:
+
+- `GROQ_API_KEY`, required when using `MODEL_PROVIDER=groq`.
+- `GROQ_MODEL`, default `llama-3.3-70b-versatile`.
+- `GROQ_BASE_URL`, default `https://api.groq.com/openai/v1`.
+- `GROQ_TIMEOUT`, default `60`.
+
+The frontend model switcher includes `Groq API` once the backend is restarted.
+
+## OpenAI-Compatible API Provider
 
 You can use an OpenAI-compatible chat completions API instead of Ollama. Keep the key on the backend only:
 
@@ -125,10 +147,10 @@ Supported API provider settings:
 - `MODEL_PROVIDER`, default `ollama`; set to `openai` for the API-key provider.
 - `OPENAI_API_KEY`, required when using `MODEL_PROVIDER=openai`.
 - `OPENAI_MODEL`, default `gpt-4o-mini`.
-- `OPENAI_BASE_URL`, default `https://api.openai.com/v1`; change this for OpenAI-compatible gateways.
+- `OPENAI_BASE_URL`, default `https://api.openai.com/v1`; change this for other OpenAI-compatible gateways.
 - `OPENAI_TIMEOUT`, default `60`.
 
-The frontend model switcher has an `Ollama local` / `API key` dropdown. It never receives or stores the API key. If you switch to `API key` without setting `OPENAI_API_KEY`, generation fails with a clear backend error.
+The frontend model switcher has an `Ollama local` / `Groq API` / `API key` dropdown. It never receives or stores API keys. If you switch to a hosted provider without setting its API key, generation fails with a clear backend error.
 
 ## API
 

@@ -7,7 +7,7 @@ from api_client import ApiModelClient
 from ollama_client import OllamaClient
 
 
-ProviderName = Literal["ollama", "openai"]
+ProviderName = Literal["ollama", "openai", "groq"]
 
 
 class ModelProviderError(RuntimeError):
@@ -17,7 +17,13 @@ class ModelProviderError(RuntimeError):
 class ModelClient:
     def __init__(self) -> None:
         self.ollama = OllamaClient()
-        self.api = ApiModelClient()
+        self.api = ApiModelClient(provider_name="OpenAI API")
+        self.groq = ApiModelClient(
+            provider_name="Groq API",
+            env_prefix="GROQ",
+            default_base_url="https://api.groq.com/openai/v1",
+            default_model="llama-3.3-70b-versatile",
+        )
         self.provider: ProviderName = self._normalize_provider(os.getenv("MODEL_PROVIDER", "ollama"))
 
     @property
@@ -42,6 +48,7 @@ class ModelClient:
         status["provider"] = provider
         status["providers"] = [
             {"id": "ollama", "name": "Ollama local"},
+            {"id": "groq", "name": "Groq API"},
             {"id": "openai", "name": "API key"},
         ]
         return status
@@ -55,6 +62,8 @@ class ModelClient:
     def _client_for_provider(self, provider: ProviderName) -> OllamaClient | ApiModelClient:
         if provider == "openai":
             return self.api
+        if provider == "groq":
+            return self.groq
         return self.ollama
 
     def _normalize_provider(self, provider: str) -> ProviderName:
@@ -63,4 +72,6 @@ class ModelClient:
             return "ollama"
         if normalized in {"openai", "api", "api-key", "api_key"}:
             return "openai"
-        raise ModelProviderError("Provider must be 'ollama' or 'openai'.")
+        if normalized in {"groq", "groq-api", "groq_api"}:
+            return "groq"
+        raise ModelProviderError("Provider must be 'ollama', 'groq', or 'openai'.")
