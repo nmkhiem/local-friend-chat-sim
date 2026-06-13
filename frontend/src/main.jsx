@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Cpu, MessageCircle, RefreshCw, Send, Sparkles } from 'lucide-react';
+import { Cpu, MessageCircle, RefreshCw, Send, Sparkles, UsersRound } from 'lucide-react';
 import './styles.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const PERSONA_COLORS = {
+  minh: 'persona-minh',
+  an: 'persona-an',
+  huy: 'persona-huy',
+  linh: 'persona-linh',
+  trang: 'persona-trang',
+};
 
 function App() {
   const [draft, setDraft] = useState('');
@@ -196,24 +203,48 @@ function App() {
         {!post ? (
           <div className="empty-state">
             <MessageCircle size={32} />
-            <p>Your shared post and simulated discussion will appear here.</p>
+            <p>Your group chat will wake up here after you share a post.</p>
           </div>
         ) : (
-          <>
-            <article className="post">
-              <span>Original post</span>
-              <p>{post.content}</p>
-              <small>{post.topic_summary}</small>
-            </article>
+          <div className="chat-window">
+            <header className="chat-header">
+              <div className="chat-title">
+                <UsersRound size={20} />
+                <div>
+                  <strong>Friend group</strong>
+                  <span>{post.comments.length ? `${countMessages(post.comments)} messages` : 'quiet for now'}</span>
+                </div>
+              </div>
+              <div className="online-cluster" aria-label="Online personas">
+                <span className="avatar persona-minh">M</span>
+                <span className="avatar persona-an">A</span>
+                <span className="avatar persona-huy">H</span>
+                <span className="avatar persona-linh">L</span>
+                <span className="avatar persona-trang">T</span>
+              </div>
+            </header>
 
-            <div className="comments">
+            <div className="chat-messages">
+              <article className="message-row mine">
+                <div className="bubble post-bubble">
+                  <div className="message-meta">
+                    <strong>You</strong>
+                    <span>{formatTime(post.created_at)}</span>
+                  </div>
+                  <p>{post.content}</p>
+                  <small>{post.topic_summary}</small>
+                </div>
+              </article>
+
               {post.comments.length === 0 ? (
-                <p className="hint">No comments yet. Simulate the first wave when you are ready.</p>
+                <p className="hint">The room is listening.</p>
               ) : (
                 post.comments.map((comment) => <Comment key={comment.id} comment={comment} />)
               )}
+
+              {(loading === 'comments' || loading === 'replies') && <TypingIndicator mode={loading} />}
             </div>
-          </>
+          </div>
         )}
       </section>
     </main>
@@ -221,21 +252,68 @@ function App() {
 }
 
 function Comment({ comment }) {
+  const personaClass = PERSONA_COLORS[comment.author_persona_id] || 'persona-default';
+  const initials = initialsFor(comment.author_name);
+
   return (
-    <article className="comment">
-      <div className="comment-body">
-        <strong>{comment.author_name}</strong>
-        <p>{comment.content}</p>
-      </div>
-      {comment.replies.length > 0 && (
-        <div className="replies">
-          {comment.replies.map((reply) => (
-            <Comment key={reply.id} comment={reply} />
-          ))}
+    <article className="message-row">
+      <span className={`avatar ${personaClass}`}>{initials}</span>
+      <div className="message-stack">
+        <div className="bubble friend-bubble">
+          <div className="message-meta">
+            <strong>{comment.author_name}</strong>
+            <span>{formatTime(comment.created_at)}</span>
+          </div>
+          <p>{comment.content}</p>
         </div>
-      )}
+        {comment.replies.length > 0 && (
+          <div className="replies">
+            {comment.replies.map((reply) => (
+              <Comment key={reply.id} comment={reply} />
+            ))}
+          </div>
+        )}
+      </div>
     </article>
   );
+}
+
+function TypingIndicator({ mode }) {
+  return (
+    <article className="message-row typing-row">
+      <span className="avatar persona-default">
+        <Sparkles size={16} />
+      </span>
+      <div className="bubble typing-bubble">
+        <strong>{mode === 'comments' ? 'Friends are typing' : 'Replies are landing'}</strong>
+        <p>
+          <span />
+          <span />
+          <span />
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function countMessages(comments) {
+  return comments.reduce((total, comment) => total + 1 + countMessages(comment.replies), 0);
+}
+
+function initialsFor(name) {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function formatTime(value) {
+  if (!value) return '';
+  const parsed = new Date(value.replace(' ', 'T'));
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 createRoot(document.getElementById('root')).render(<App />);
