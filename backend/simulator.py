@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Protocol
 
-from ollama_client import OllamaClient
 from personas import Council, Persona
 
 
@@ -17,6 +16,11 @@ MAX_MEMORY_CHARS = 1000
 
 class GenerationError(RuntimeError):
     pass
+
+
+class GenerationClient(Protocol):
+    async def generate(self, prompt: str) -> str:
+        ...
 
 
 def summarize_topic(content: str) -> str:
@@ -160,7 +164,7 @@ Output shape:
 
 
 async def generate_comment_batch(
-    ollama: OllamaClient,
+    ollama: GenerationClient,
     council: Council,
     personas: list[Persona],
     post_content: str,
@@ -192,7 +196,7 @@ async def generate_comment_batch(
 
 
 async def generate_reply_batch(
-    ollama: OllamaClient,
+    ollama: GenerationClient,
     council: Council,
     personas: list[Persona],
     post_content: str,
@@ -244,7 +248,7 @@ async def generate_reply_batch(
 
 
 async def generate_discussion_summary(
-    ollama: OllamaClient,
+    ollama: GenerationClient,
     council: Council,
     post_content: str,
     comments: list[dict[str, Any]],
@@ -262,7 +266,7 @@ async def generate_discussion_summary(
 
 
 async def generate_memory_updates(
-    ollama: OllamaClient,
+    ollama: GenerationClient,
     council: Council,
     personas: list[Persona],
     post_content: str,

@@ -665,7 +665,7 @@ h1 {
 
 .model-switcher {
   display: inline-grid;
-  grid-template-columns: auto minmax(88px, 150px);
+  grid-template-columns: auto minmax(82px, 118px) minmax(88px, 150px);
   align-items: center;
   gap: 4px;
   border: 1px solid #d6dee8;
@@ -893,6 +893,6 @@ h1 {
   }
 
   .model-switcher {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
   }
 }

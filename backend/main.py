@@ -6,7 +6,9 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection, init_db, row_to_dict
-from ollama_client import OllamaClient, OllamaError
+from api_client import ApiModelError
+from model_client import ModelClient, ModelProviderError
+from ollama_client import OllamaError
 from personas import Council, DEFAULT_COUNCILS_BY_ID, DEFAULT_PERSONAS_BY_ID, Persona
 from schemas import (
     CommentOut,
@@ -35,7 +37,7 @@ from simulator import (
 
 
 app = FastAPI(title="Local Friend Chat Simulator")
-ollama = OllamaClient()
+model_client = ModelClient()
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,28 +63,28 @@ def health() -> dict[str, str]:
 
 @app.get("/models")
 async def list_models() -> dict[str, Any]:
-    return await ollama.model_status()
+    return await model_client.model_status()
 
 
 @app.post("/models")
 async def select_model(payload: ModelSelect) -> dict[str, Any]:
     try:
-        ollama.set_model(payload.model)
-    except ValueError as exc:
+        model_client.set_model(model=payload.model, provider=payload.provider)
+    except (ValueError, ModelProviderError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await ollama.model_status()
+    return await model_client.model_status()
 
 
 @app.post("/models/pull")
 async def pull_model(payload: ModelSelect) -> dict[str, Any]:
     try:
-        pulled = await ollama.pull_model(payload.model)
+        pulled = await model_client.pull_model(payload.model)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not pulled:
         raise HTTPException(status_code=502, detail="Could not download model from Ollama.")
-    return await ollama.model_status()
+    return await model_client.model_status()
 
 
 @app.get("/personas", response_model=list[PersonaOut])
@@ -298,7 +300,7 @@ def create_post(payload: PostCreate) -> dict[str, Any]:
             INSERT INTO posts (content, topic_summary, council_id, model)
             VALUES (?, ?, ?, ?)
             """,
-            (content, topic_summary, council_id, ollama.model),
+            (content, topic_summary, council_id, model_client.model),
         )
         post_id = cursor.lastrowid
 
@@ -349,13 +351,13 @@ async def simulate_comments(post_id: int) -> list[dict[str, Any]]:
 
     try:
         generated_comments = await generate_comment_batch(
-            ollama,
+            model_client,
             council,
             personas,
             post["content"],
             post["topic_summary"],
         )
-    except (GenerationError, OllamaError) as exc:
+    except (GenerationError, OllamaError, ApiModelError) as exc:
         raise _generation_http_error(exc) from exc
 
     created = _store_comments(post_id, generated_comments)
@@ -382,14 +384,14 @@ async def simulate_replies(post_id: int) -> list[dict[str, Any]]:
     reply_tasks = _reply_tasks(post_id, personas, existing_comments)
     try:
         generated_replies = await generate_reply_batch(
-            ollama,
+            model_client,
             context["council"],
             personas,
             post["content"],
             _comments_for_prompt(existing_comments),
             reply_tasks,
         )
-    except (GenerationError, OllamaError) as exc:
+    except (GenerationError, OllamaError, ApiModelError) as exc:
         raise _generation_http_error(exc) from exc
 
     created = _store_comments(post_id, generated_replies)
@@ -418,14 +420,14 @@ async def continue_discussion(post_id: int) -> dict[str, Any]:
     reply_tasks = _reply_tasks(post_id + len(existing_comments), personas, target_pool)
     try:
         generated_replies = await generate_reply_batch(
-            ollama,
+            model_client,
             context["council"],
             personas,
             post["content"],
             _comments_for_prompt(existing_comments),
             reply_tasks,
         )
-    except (GenerationError, OllamaError) as exc:
+    except (GenerationError, OllamaError, ApiModelError) as exc:
         raise _generation_http_error(exc) from exc
 
     unique_replies = _dedupe_generated(generated_replies, existing_comments)
@@ -745,7 +747,7 @@ async def _update_summary_for_post(post_id: int) -> None:
         return
 
     summary = await generate_discussion_summary(
-        ollama,
+        model_client,
         context["council"],
         context["post"]["content"],
         _comments_for_prompt(comments),
@@ -757,14 +759,14 @@ async def _update_summary_for_post(post_id: int) -> None:
             SET discussion_summary = ?, model = ?
             WHERE id = ?
             """,
-            (summary, ollama.model, post_id),
+            (summary, model_client.model, post_id),
         )
 
 
 async def _try_update_summary_for_post(post_id: int) -> None:
     try:
         await _update_summary_for_post(post_id)
-    except (GenerationError, OllamaError):
+    except (GenerationError, OllamaError, ApiModelError):
         return
 
 
@@ -787,7 +789,7 @@ async def _update_memories(post_id: int, participating_persona_ids: set[str]) ->
         return
 
     updates = await generate_memory_updates(
-        ollama,
+        model_client,
         _council_from_detail(council_detail),
         personas,
         post["content"],

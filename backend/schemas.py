@@ -9,7 +9,8 @@ class PostCreate(BaseModel):
 
 
 class ModelSelect(BaseModel):
-    model: str = Field(min_length=1, max_length=120)
+    model: str | None = Field(default=None, min_length=1, max_length=120)
+    provider: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class PersonaOut(BaseModel):

@@ -7,7 +7,8 @@ The app is intentionally local and small:
 - `backend/personas.py` contains seed definitions only.
 - SQLite stores editable personas, councils, memories, posts, and comments.
 - `backend/simulator.py` owns prompt construction, JSON validation, summaries, and memory updates.
-- `backend/ollama_client.py` is the required Ollama-compatible HTTP client for generation.
+- `backend/model_client.py` routes generation to either Ollama or an OpenAI-compatible API-key provider.
+- `backend/ollama_client.py` and `backend/api_client.py` implement the provider-specific HTTP calls.
 
 ## SQLite Model
 
@@ -28,12 +29,18 @@ Generation follows a read, close, generate, write pattern:
 
 1. Load the post, council, active council personas, persona memory, and existing comments.
 2. Close the SQLite connection.
-3. Call Ollama with strict JSON prompts.
+3. Call the selected model provider with strict JSON prompts.
 4. Validate JSON shape, persona IDs, parent comment IDs, and content length.
-5. Return an HTTP error if Ollama fails or returns invalid JSON.
+5. Return an HTTP error if the provider fails or returns invalid JSON.
 6. Open a new SQLite connection and write comments, replies, summaries, or memory updates.
 
-SQLite connections use a timeout, `PRAGMA busy_timeout`, foreign keys, and WAL mode. No connection is intentionally held while waiting on Ollama.
+SQLite connections use a timeout, `PRAGMA busy_timeout`, foreign keys, and WAL mode. No connection is intentionally held while waiting on a model provider.
+
+## Model Providers
+
+The backend defaults to `MODEL_PROVIDER=ollama`. Ollama keeps generation fully local and supports pulling models from the UI. The optional API-key provider uses an OpenAI-compatible `/v1/chat/completions` endpoint with `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, and `OPENAI_TIMEOUT`.
+
+API keys are read from backend environment variables only. They are not stored in SQLite and are not sent to the frontend. The `/models` endpoint exposes provider status, current model name, and whether the provider is configured.
 
 ## Councils And Personas
 
@@ -76,7 +83,7 @@ Next step:
 The React UI has three main areas:
 
 - Left sidebar: new chat, council selector, thread history.
-- Main workspace: current thread, summary, composer, model switcher, continue, delete, and markdown actions.
+- Main workspace: current thread, summary, composer, provider/model switcher, continue, delete, and markdown actions.
 - Settings inspector: council fields, council membership, persona profile, memory editor, reset controls, and clear-memory action.
 
 The send and continue flows use an in-flight ref plus disabled controls to prevent duplicate requests.
@@ -85,4 +92,4 @@ Destructive UI actions use browser confirmation before calling local delete/rese
 
 ## Generation Errors
 
-If Ollama is offline, no model is installed, a request times out, or JSON validation fails, generation endpoints return an error instead of synthetic template content. If `OLLAMA_MODEL` is not installed but another configured model is installed, the backend auto-selects the installed model before generating.
+If the selected provider is offline, missing configuration, times out, or JSON validation fails, generation endpoints return an error instead of synthetic template content. If `OLLAMA_MODEL` is not installed but another configured Ollama model is installed, the backend auto-selects the installed model before generating.

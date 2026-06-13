@@ -1,6 +1,6 @@
 # Local Friend Chat Simulator
 
-A local-first council simulator for trying ideas against small simulated groups. The app stores everything in SQLite, uses editable personas and reusable councils, and calls an Ollama-compatible local model for generation. If Ollama is unavailable or generation returns invalid JSON, the API returns an error instead of synthetic template text.
+A local-first council simulator for trying ideas against small simulated groups. The app stores everything in SQLite, uses editable personas and reusable councils, and calls either an Ollama local model or an OpenAI-compatible API key provider for generation. If generation fails or returns invalid JSON, the API returns an error instead of synthetic template text.
 
 ## What v0.2 Adds
 
@@ -11,10 +11,11 @@ A local-first council simulator for trying ideas against small simulated groups.
 - Continue discussion endpoint and UI action.
 - Markdown export for a complete thread.
 - Short structured discussion summaries.
+- Optional API-key generation provider for faster or higher-quality hosted models.
 
 ## Project Structure
 
-- `backend/` - FastAPI, SQLite migrations/seeding, persona simulation, optional Ollama client.
+- `backend/` - FastAPI, SQLite migrations/seeding, persona simulation, and model provider clients.
 - `frontend/` - React + Vite council workspace UI.
 - `docs/` - lightweight architecture notes.
 
@@ -106,6 +107,29 @@ The backend uses:
 
 The model switcher can display installed models, configured missing models, switch the active model, and optionally trigger an Ollama pull. If `OLLAMA_MODEL` is not installed, the backend auto-selects the first installed model from the configured options. Do not pull large models unless you actually want them locally.
 
+## API Key Provider
+
+You can use an OpenAI-compatible chat completions API instead of Ollama. Keep the key on the backend only:
+
+```bash
+cd backend
+source .venv/bin/activate
+MODEL_PROVIDER=openai \
+OPENAI_API_KEY=sk-your-key \
+OPENAI_MODEL=gpt-4o-mini \
+uvicorn main:app --reload
+```
+
+Supported API provider settings:
+
+- `MODEL_PROVIDER`, default `ollama`; set to `openai` for the API-key provider.
+- `OPENAI_API_KEY`, required when using `MODEL_PROVIDER=openai`.
+- `OPENAI_MODEL`, default `gpt-4o-mini`.
+- `OPENAI_BASE_URL`, default `https://api.openai.com/v1`; change this for OpenAI-compatible gateways.
+- `OPENAI_TIMEOUT`, default `60`.
+
+The frontend model switcher has an `Ollama local` / `API key` dropdown. It never receives or stores the API key. If you switch to `API key` without setting `OPENAI_API_KEY`, generation fails with a clear backend error.
+
 ## API
 
 - `GET /health`
@@ -138,4 +162,4 @@ The model switcher can display installed models, configured missing models, swit
 - Persona memory is a short summary, not vector retrieval or durable fact management.
 - Personas are simulated and can be inconsistent, especially with small local models.
 - Local model speed and quality depend on hardware and the selected Ollama model.
-- Generation requires Ollama to be reachable and return valid JSON; there is no synthetic template text path.
+- Generation requires the selected provider to be configured and return valid JSON; there is no synthetic template text path.

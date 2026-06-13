@@ -176,19 +176,41 @@ function App() {
   async function selectModel(modelName) {
     if (!modelName || modelName === modelStatus?.current_model) return;
     const selected = modelOptions.find((model) => model.name === modelName);
+    const isOllamaProvider = (modelStatus?.provider || 'ollama') === 'ollama';
     const shouldDownload =
+      isOllamaProvider &&
       selected &&
       !selected.installed &&
       window.confirm(`${modelName} is not downloaded. Pull it with Ollama now?`);
 
-    if (selected && !selected.installed && !shouldDownload) return;
+    if (isOllamaProvider && selected && !selected.installed && !shouldDownload) return;
 
     setModelLoading(true);
     setError('');
     try {
-      const status = await requestJson(selected?.installed ? '/models' : '/models/pull', {
+      const status = await requestJson(
+        isOllamaProvider && selected && !selected.installed ? '/models/pull' : '/models',
+        {
+          method: 'POST',
+          body: JSON.stringify({ model: modelName }),
+        },
+      );
+      setModelStatus(status);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setModelLoading(false);
+    }
+  }
+
+  async function selectProvider(provider) {
+    if (!provider || provider === modelStatus?.provider) return;
+    setModelLoading(true);
+    setError('');
+    try {
+      const status = await requestJson('/models', {
         method: 'POST',
-        body: JSON.stringify({ model: modelName }),
+        body: JSON.stringify({ provider }),
       });
       setModelStatus(status);
     } catch (err) {
@@ -608,6 +630,7 @@ function App() {
             modelStatus={modelStatus}
             onDraftChange={setDraft}
             onModelSelect={selectModel}
+            onProviderSelect={selectProvider}
             onSend={sharePost}
           />
         </section>
@@ -648,8 +671,15 @@ function Composer({
   modelStatus,
   onDraftChange,
   onModelSelect,
+  onProviderSelect,
   onSend,
 }) {
+  const providerOptions = modelStatus?.providers || [
+    { id: 'ollama', name: 'Ollama local' },
+    { id: 'openai', name: 'API key' },
+  ];
+  const provider = modelStatus?.provider || 'ollama';
+
   return (
     <section className="composer">
       <textarea
@@ -660,18 +690,32 @@ function Composer({
       />
 
       <div className="actions">
-        <div className="model-switcher" aria-label="Ollama model switcher">
+        <div className="model-switcher" aria-label="Model provider and model switcher">
           <Cpu size={15} />
+          <select
+            value={provider}
+            onChange={(event) => onProviderSelect(event.target.value)}
+            disabled={modelLoading || isBusy}
+            title="Switch generation provider"
+          >
+            {providerOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
           <select
             value={modelStatus?.current_model || ''}
             onChange={(event) => onModelSelect(event.target.value)}
             disabled={modelLoading || isBusy || modelOptions.length === 0}
             title={
               !modelStatus
-                ? 'Checking Ollama models'
+                ? 'Checking models'
                 : modelStatus.connected
-                  ? 'Switch Ollama model'
-                  : 'Ollama offline'
+                  ? 'Switch model'
+                  : provider === 'openai'
+                    ? 'API key is not configured'
+                    : 'Ollama offline'
             }
           >
             {!modelStatus?.current_model && <option value="">Model</option>}
