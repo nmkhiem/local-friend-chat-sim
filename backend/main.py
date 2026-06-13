@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import get_connection, init_db, row_to_dict
 from ollama_client import OllamaClient
 from personas import PERSONAS
-from schemas import CommentOut, PostCreate, PostDetail, PostOut
+from schemas import CommentOut, ModelSelect, PostCreate, PostDetail, PostOut
 from simulator import (
-    generate_comment,
-    generate_reply,
+    generate_comment_batch,
+    generate_reply_batch,
     select_comment_personas,
     select_reply_personas,
     summarize_topic,
@@ -41,6 +41,20 @@ def on_startup() -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/models")
+async def list_models() -> dict[str, Any]:
+    return await ollama.model_status()
+
+
+@app.post("/models")
+async def select_model(payload: ModelSelect) -> dict[str, Any]:
+    try:
+        ollama.set_model(payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await ollama.model_status()
 
 
 @app.post("/posts", response_model=PostOut)
@@ -79,17 +93,17 @@ def get_post(post_id: int) -> dict[str, Any]:
 async def simulate_comments(post_id: int) -> list[dict[str, Any]]:
     post = _get_post_or_404(post_id)
     personas = select_comment_personas(post_id, post["content"])
+    generated_comments = await generate_comment_batch(ollama, personas, post["content"], post["topic_summary"])
     created: list[dict[str, Any]] = []
 
     with get_connection() as conn:
-        for persona in personas:
-            content = await generate_comment(ollama, persona, post["content"], post["topic_summary"])
+        for generated in generated_comments:
             cursor = conn.execute(
                 """
                 INSERT INTO comments (post_id, author_persona_id, parent_comment_id, content)
                 VALUES (?, ?, NULL, ?)
                 """,
-                (post_id, persona.id, content),
+                (post_id, generated["persona_id"], generated["content"]),
             )
             created.append(_comment_by_id(conn, cursor.lastrowid))
 
@@ -101,7 +115,7 @@ async def simulate_replies(post_id: int) -> list[dict[str, Any]]:
     post = _get_post_or_404(post_id)
 
     with get_connection() as conn:
-        existing_comments = conn.execute(
+        rows = conn.execute(
             """
             SELECT * FROM comments
             WHERE post_id = ?
@@ -110,20 +124,49 @@ async def simulate_replies(post_id: int) -> list[dict[str, Any]]:
             (post_id,),
         ).fetchall()
 
-        if not existing_comments:
-            raise HTTPException(status_code=400, detail="Create comments before simulating replies.")
+    existing_comments = [row_to_dict(row) for row in rows]
+    if not existing_comments:
+        raise HTTPException(status_code=400, detail="Create comments before simulating replies.")
 
-        personas = select_reply_personas(post_id, f"{post['content']}:{len(existing_comments)}")
-        created: list[dict[str, Any]] = []
-        for index, persona in enumerate(personas):
-            target = existing_comments[index % len(existing_comments)]
-            content = await generate_reply(ollama, persona, post["content"], target["content"])
+    personas = select_reply_personas(post_id, f"{post['content']}:{len(existing_comments)}")
+    comments_for_prompt = [
+        {
+            "id": comment["id"],
+            "persona_id": comment["author_persona_id"],
+            "content": comment["content"],
+        }
+        for comment in existing_comments
+    ]
+    reply_tasks = []
+    for index, persona in enumerate(personas):
+        target = existing_comments[index % len(existing_comments)]
+        reply_tasks.append(
+            {
+                "persona_id": persona.id,
+                "persona_name": persona.name,
+                "personality": persona.personality,
+                "speech_style": persona.speech_style,
+                "parent_comment_id": target["id"],
+                "target_comment": target["content"],
+            }
+        )
+
+    generated_replies = await generate_reply_batch(ollama, post["content"], comments_for_prompt, reply_tasks)
+    created: list[dict[str, Any]] = []
+
+    with get_connection() as conn:
+        for generated in generated_replies:
             cursor = conn.execute(
                 """
                 INSERT INTO comments (post_id, author_persona_id, parent_comment_id, content)
                 VALUES (?, ?, ?, ?)
                 """,
-                (post_id, persona.id, target["id"], content),
+                (
+                    post_id,
+                    generated["persona_id"],
+                    generated["parent_comment_id"],
+                    generated["content"],
+                ),
             )
             created.append(_comment_by_id(conn, cursor.lastrowid))
 

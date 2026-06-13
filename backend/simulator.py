@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from typing import Any
 
 from ollama_client import OllamaClient
 from personas import PERSONAS, Persona
@@ -41,16 +43,20 @@ def select_reply_personas(post_id: int, content: str) -> list[Persona]:
     return _persona_selection(post_id, content, REPLY_COUNTS, "replies")
 
 
-def comment_prompt(persona: Persona, post_content: str, topic_summary: str) -> str:
-    return f"""You are {persona.name}.
+def comment_batch_prompt(personas: list[Persona], post_content: str, topic_summary: str) -> str:
+    personas_json = [
+        {
+            "persona_id": persona.id,
+            "name": persona.name,
+            "personality": persona.personality,
+            "interests": persona.interests,
+            "speech_style": persona.speech_style,
+        }
+        for persona in personas
+    ]
+    return f"""You are generating friend-like comments for a local simulated group chat.
 
-Personality: {persona.personality}
-
-Interests: {persona.interests}
-
-Speech style: {persona.speech_style}
-
-The user shared this post:
+Original post:
 
 {post_content}
 
@@ -58,41 +64,97 @@ Topic summary:
 
 {topic_summary}
 
-Write one natural friend-like comment.
+Personas:
 
-Keep it short.
+{json.dumps(personas_json, ensure_ascii=False)}
 
-Do not sound like an assistant.
+Return only valid JSON.
 
-Do not over-explain.
+Return a JSON array.
 
-If appropriate, ask a question or gently challenge the idea.
+Each item must have:
+
+- persona_id
+- content
+
+Rules:
+
+- One short natural comment per persona.
+- Sound like a friend, not an assistant.
+- Do not over-explain.
+- Do not wrap JSON in markdown.
 """
 
 
-def reply_prompt(persona: Persona, post_content: str, target_comment: str) -> str:
-    return f"""You are {persona.name}.
-
-Personality: {persona.personality}
-
-Speech style: {persona.speech_style}
+def reply_batch_prompt(post_content: str, comments: list[dict[str, Any]], reply_tasks: list[dict[str, Any]]) -> str:
+    return f"""You are generating short replies in a local simulated group chat.
 
 Original post:
 
 {post_content}
 
-Existing comment to reply to:
+Existing comments:
 
-{target_comment}
+{json.dumps(comments, ensure_ascii=False)}
 
-Write one short natural reply.
+Selected reply tasks:
 
-It should sound like a friend replying in a group chat.
+{json.dumps(reply_tasks, ensure_ascii=False)}
 
-Do not repeat the original post.
+Return only valid JSON.
 
-Do not sound like an assistant.
+Return a JSON array.
+
+Each item must have:
+
+- persona_id
+- parent_comment_id
+- content
+
+Rules:
+
+- One short natural reply per task.
+- Reply to the target comment.
+- Sound like a friend, not an assistant.
+- Do not repeat the original post.
+- Do not wrap JSON in markdown.
 """
+
+
+def _extract_json_array(text: str) -> list[Any] | None:
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(parsed, list):
+        return None
+    return parsed
+
+
+def _clean_content(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    content = " ".join(value.split())
+    return content or None
+
+
+def _fallback_comments(personas: list[Persona], post_content: str, topic_summary: str) -> list[dict[str, str]]:
+    return [
+        {"persona_id": persona.id, "content": fallback_comment(persona, post_content, topic_summary)}
+        for persona in personas
+    ]
+
+
+def _fallback_replies(reply_tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "persona_id": task["persona_id"],
+            "parent_comment_id": task["parent_comment_id"],
+            "content": fallback_reply(PERSONAS[task["persona_id"]], task["target_comment"]),
+        }
+        for task in reply_tasks
+    ]
 
 
 def _keyword(content: str) -> str:
@@ -128,21 +190,73 @@ def fallback_reply(persona: Persona, target_comment: str) -> str:
     return templates[persona.id]
 
 
-async def generate_comment(
+async def generate_comment_batch(
     ollama: OllamaClient,
-    persona: Persona,
+    personas: list[Persona],
     post_content: str,
     topic_summary: str,
-) -> str:
-    generated = await ollama.generate(comment_prompt(persona, post_content, topic_summary))
-    return generated or fallback_comment(persona, post_content, topic_summary)
+) -> list[dict[str, str]]:
+    generated = await ollama.generate(comment_batch_prompt(personas, post_content, topic_summary))
+    if not generated:
+        return _fallback_comments(personas, post_content, topic_summary)
+
+    valid_persona_ids = {persona.id for persona in personas}
+    parsed = _extract_json_array(generated)
+    if parsed is None:
+        return _fallback_comments(personas, post_content, topic_summary)
+
+    comments: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in parsed:
+        if not isinstance(item, dict):
+            return _fallback_comments(personas, post_content, topic_summary)
+        persona_id = item.get("persona_id")
+        content = _clean_content(item.get("content"))
+        if persona_id not in valid_persona_ids or not content or persona_id in seen:
+            return _fallback_comments(personas, post_content, topic_summary)
+        seen.add(persona_id)
+        comments.append({"persona_id": persona_id, "content": content})
+
+    if seen != valid_persona_ids:
+        return _fallback_comments(personas, post_content, topic_summary)
+    return comments
 
 
-async def generate_reply(
+async def generate_reply_batch(
     ollama: OllamaClient,
-    persona: Persona,
     post_content: str,
-    target_comment: str,
-) -> str:
-    generated = await ollama.generate(reply_prompt(persona, post_content, target_comment))
-    return generated or fallback_reply(persona, target_comment)
+    comments: list[dict[str, Any]],
+    reply_tasks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    generated = await ollama.generate(reply_batch_prompt(post_content, comments, reply_tasks))
+    if not generated:
+        return _fallback_replies(reply_tasks)
+
+    valid_pairs = {(task["persona_id"], task["parent_comment_id"]) for task in reply_tasks}
+    parsed = _extract_json_array(generated)
+    if parsed is None:
+        return _fallback_replies(reply_tasks)
+
+    replies: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for item in parsed:
+        if not isinstance(item, dict):
+            return _fallback_replies(reply_tasks)
+        persona_id = item.get("persona_id")
+        parent_comment_id = item.get("parent_comment_id")
+        content = _clean_content(item.get("content"))
+        pair = (persona_id, parent_comment_id)
+        if pair not in valid_pairs or not content or pair in seen:
+            return _fallback_replies(reply_tasks)
+        seen.add(pair)
+        replies.append(
+            {
+                "persona_id": persona_id,
+                "parent_comment_id": parent_comment_id,
+                "content": content,
+            }
+        )
+
+    if seen != valid_pairs:
+        return _fallback_replies(reply_tasks)
+    return replies

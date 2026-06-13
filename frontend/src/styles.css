@@ -15,6 +15,7 @@ body {
 }
 
 button,
+select,
 textarea {
   font: inherit;
 }
@@ -85,12 +86,12 @@ button {
   cursor: pointer;
 }
 
-button:nth-child(2) {
+.actions > button:nth-child(2) {
   border-color: #386641;
   background: #386641;
 }
 
-button:nth-child(3) {
+.actions > button:nth-child(3) {
   border-color: #9a3412;
   background: #9a3412;
 }
@@ -108,6 +109,87 @@ button:disabled {
   padding: 10px 12px;
   color: #7f1d1d;
   background: #fee2e2;
+}
+
+.model-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d4d0c8;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #fffdfa;
+}
+
+.model-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.model-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-ok,
+.status-missing {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.status-ok {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-missing {
+  color: #7f1d1d;
+  background: #fee2e2;
+}
+
+.icon-button {
+  min-height: 34px;
+  width: 34px;
+  padding: 0;
+  color: #202124;
+  background: #f7f4ef;
+}
+
+select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d4d0c8;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #202124;
+  background: #fff;
+}
+
+.model-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.model-lists span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.model-lists p {
+  margin: 0;
+  color: #202124;
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .thread {
@@ -198,5 +280,9 @@ button:disabled {
 
   .replies {
     margin-left: 12px;
+  }
+
+  .model-lists {
+    grid-template-columns: 1fr;
   }
 }

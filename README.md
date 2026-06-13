@@ -58,9 +58,12 @@ The backend uses:
 
 - `OLLAMA_BASE_URL`, default `http://localhost:11434`
 - `OLLAMA_MODEL`, default `llama3.1`
+- `OLLAMA_MODEL_OPTIONS`, optional comma-separated list shown in the UI as model choices
 - `OLLAMA_TIMEOUT`, default `8`
 
 Without Ollama, the same endpoints continue to work with deterministic fallback responses.
+
+The UI can display downloaded Ollama models, show configured models that are not downloaded yet, and switch the active runtime model. Only downloaded models are selectable from the dropdown.
 
 ## Basic Usage
 
@@ -73,6 +76,8 @@ Without Ollama, the same endpoints continue to work with deterministic fallback 
 ## API
 
 - `GET /health`
+- `GET /models`
+- `POST /models`
 - `POST /posts`
 - `GET /posts`
 - `GET /posts/{post_id}`
