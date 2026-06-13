@@ -53,4 +53,7 @@ curl_json POST "/posts/${post_id}/continue" >/dev/null
 echo "10. export markdown"
 curl -fsS "${API_BASE_URL}/posts/${post_id}/export.md" | grep -q "# Local Friend Chat Thread"
 
+echo "11. delete smoke post"
+curl_json DELETE "/posts/${post_id}" >/dev/null
+
 echo "Smoke test passed for post ${post_id}"

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection, init_db, row_to_dict
 from ollama_client import OllamaClient
-from personas import Council, Persona
+from personas import Council, DEFAULT_COUNCILS_BY_ID, DEFAULT_PERSONAS_BY_ID, Persona
 from schemas import (
     CommentOut,
     CouncilDetail,
@@ -123,6 +123,41 @@ def update_persona(persona_id: str, payload: PersonaUpdate) -> dict[str, Any]:
     return _get_persona_or_404(persona_id)
 
 
+@app.post("/personas/{persona_id}/reset", response_model=PersonaOut)
+def reset_persona(persona_id: str) -> dict[str, Any]:
+    default = DEFAULT_PERSONAS_BY_ID.get(persona_id)
+    if default is None:
+        raise HTTPException(status_code=404, detail="Default persona not found.")
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE personas
+            SET
+                name = ?,
+                avatar_label = ?,
+                personality = ?,
+                interests = ?,
+                speech_style = ?,
+                role = ?,
+                is_active = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                default.name,
+                default.avatar_label,
+                default.personality,
+                default.interests,
+                default.speech_style,
+                default.role,
+                1 if default.is_active else 0,
+                persona_id,
+            ),
+        )
+    return _get_persona_or_404(persona_id)
+
+
 @app.get("/personas/{persona_id}/memory", response_model=PersonaMemoryOut)
 def get_persona_memory(persona_id: str) -> dict[str, str]:
     _get_persona_or_404(persona_id)
@@ -153,6 +188,14 @@ def update_persona_memory(persona_id: str, payload: PersonaMemoryIn) -> dict[str
     return get_persona_memory(persona_id)
 
 
+@app.delete("/personas/{persona_id}/memory", response_model=PersonaMemoryOut)
+def clear_persona_memory(persona_id: str) -> dict[str, str]:
+    _get_persona_or_404(persona_id)
+    with get_connection() as conn:
+        conn.execute("DELETE FROM persona_memories WHERE persona_id = ?", (persona_id,))
+    return {"persona_id": persona_id, "memory": "", "updated_at": ""}
+
+
 @app.get("/councils", response_model=list[CouncilOut])
 def list_councils() -> list[dict[str, Any]]:
     with get_connection() as conn:
@@ -163,6 +206,36 @@ def list_councils() -> list[dict[str, Any]]:
 
 @app.get("/councils/{council_id}", response_model=CouncilDetail)
 def get_council(council_id: str) -> dict[str, Any]:
+    return _get_council_or_404(council_id)
+
+
+@app.post("/councils/{council_id}/reset", response_model=CouncilDetail)
+def reset_council(council_id: str) -> dict[str, Any]:
+    default = DEFAULT_COUNCILS_BY_ID.get(council_id)
+    if default is None:
+        raise HTTPException(status_code=404, detail="Default council not found.")
+
+    with get_connection() as conn:
+        missing = _missing_persona_ids(conn, list(default.persona_ids))
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Unknown persona ids: {', '.join(missing)}")
+        conn.execute(
+            """
+            UPDATE councils
+            SET name = ?, description = ?, simulation_style = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (default.name, default.description, default.simulation_style, council_id),
+        )
+        conn.execute("DELETE FROM council_personas WHERE council_id = ?", (council_id,))
+        for index, persona_id in enumerate(default.persona_ids):
+            conn.execute(
+                """
+                INSERT INTO council_personas (council_id, persona_id, position)
+                VALUES (?, ?, ?)
+                """,
+                (council_id, persona_id, index),
+            )
     return _get_council_or_404(council_id)
 
 
@@ -254,6 +327,14 @@ def list_posts() -> list[dict[str, Any]]:
 @app.get("/posts/{post_id}", response_model=PostDetail)
 def get_post(post_id: int) -> dict[str, Any]:
     return _post_detail(post_id)
+
+
+@app.delete("/posts/{post_id}")
+def delete_post(post_id: int) -> dict[str, Any]:
+    _get_post_or_404(post_id)
+    with get_connection() as conn:
+        conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+    return {"deleted": True, "post_id": post_id}
 
 
 @app.post("/posts/{post_id}/simulate", response_model=list[CommentOut])

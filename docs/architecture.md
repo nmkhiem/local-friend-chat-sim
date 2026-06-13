@@ -54,6 +54,8 @@ Personas are regular SQLite rows with:
 
 Inactive personas remain editable and visible but are excluded from new generation waves.
 
+Default persona and council seed data can be restored per record. Persona reset restores profile fields and active state but keeps memory separate. Council reset restores name, description, simulation style, and ordered membership.
+
 ## Memory And Summaries
 
 After reply waves and continued discussion, participating personas get memory updates. Memory is a short local summary capped to about 1000 characters. Discussion summaries are stored on `posts.discussion_summary` in a compact markdown-like structure:
@@ -74,10 +76,12 @@ Next step:
 The React UI has three main areas:
 
 - Left sidebar: new chat, council selector, thread history.
-- Main workspace: current thread, summary, composer, model switcher, continue and markdown actions.
-- Settings inspector: council fields, council membership, persona profile and memory editor.
+- Main workspace: current thread, summary, composer, model switcher, continue, delete, and markdown actions.
+- Settings inspector: council fields, council membership, persona profile, memory editor, reset controls, and clear-memory action.
 
 The send and continue flows use an in-flight ref plus disabled controls to prevent duplicate requests.
+
+Destructive UI actions use browser confirmation before calling local delete/reset endpoints. Thread deletion relies on SQLite cascading deletes for comments.
 
 ## Fallback Behavior
 

@@ -5,15 +5,18 @@ import {
   Check,
   Copy,
   Cpu,
+  Eraser,
   History,
   MessageCircle,
   PanelRightOpen,
   Play,
   Plus,
+  RotateCcw,
   Save,
   Send,
   Settings,
   Sparkles,
+  Trash2,
   UsersRound,
   X,
 } from 'lucide-react';
@@ -276,6 +279,24 @@ function App() {
     }
   }
 
+  async function deleteThread() {
+    if (!post || isBusy) return;
+    const ok = window.confirm('Delete this thread and all of its comments?');
+    if (!ok) return;
+
+    setLoading('delete');
+    setError('');
+    try {
+      await requestJson(`/posts/${post.id}`, { method: 'DELETE' });
+      setPost(null);
+      await refreshThreads();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading('');
+    }
+  }
+
   async function saveCouncil() {
     if (!selectedCouncil || !councilDraft) return;
     setSaveStatus('saving');
@@ -286,6 +307,32 @@ function App() {
         body: JSON.stringify(councilDraft),
       });
       setCouncils((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      if (post?.council_id === saved.id) await refreshPost(post.id);
+      setSaveStatus('saved');
+      window.setTimeout(() => setSaveStatus(''), 1200);
+    } catch (err) {
+      setError(err.message);
+      setSaveStatus('');
+    }
+  }
+
+  async function resetCouncil() {
+    if (!selectedCouncil) return;
+    const ok = window.confirm(`Reset ${selectedCouncil.name} to its default council settings?`);
+    if (!ok) return;
+
+    setSaveStatus('saving');
+    setError('');
+    try {
+      const saved = await requestJson(`/councils/${selectedCouncil.id}/reset`, { method: 'POST' });
+      setCouncils((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      setCouncilDraft({
+        name: saved.name,
+        description: saved.description,
+        simulation_style: saved.simulation_style,
+        persona_ids: [...saved.persona_ids],
+      });
+      setSelectedPersonaId(saved.persona_ids[0] || '');
       if (post?.council_id === saved.id) await refreshPost(post.id);
       setSaveStatus('saved');
       window.setTimeout(() => setSaveStatus(''), 1200);
@@ -319,6 +366,49 @@ function App() {
       const merged = { ...saved, memory: memory.memory };
       setPersonas((current) => current.map((item) => (item.id === merged.id ? merged : item)));
       await refreshPersonas();
+      if (post) await refreshPost(post.id);
+      setSaveStatus('saved');
+      window.setTimeout(() => setSaveStatus(''), 1200);
+    } catch (err) {
+      setError(err.message);
+      setSaveStatus('');
+    }
+  }
+
+  async function resetPersona() {
+    if (!personaDraft) return;
+    const ok = window.confirm(`Reset ${personaDraft.name} to the default profile? Memory will be kept.`);
+    if (!ok) return;
+
+    setSaveStatus('saving');
+    setError('');
+    try {
+      const saved = await requestJson(`/personas/${personaDraft.id}/reset`, { method: 'POST' });
+      setPersonas((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      setPersonaDraft(saved);
+      await refreshPersonas();
+      if (post) await refreshPost(post.id);
+      setSaveStatus('saved');
+      window.setTimeout(() => setSaveStatus(''), 1200);
+    } catch (err) {
+      setError(err.message);
+      setSaveStatus('');
+    }
+  }
+
+  async function clearPersonaMemory() {
+    if (!personaDraft) return;
+    const ok = window.confirm(`Clear memory for ${personaDraft.name}?`);
+    if (!ok) return;
+
+    setSaveStatus('saving');
+    setError('');
+    try {
+      await requestJson(`/personas/${personaDraft.id}/memory`, { method: 'DELETE' });
+      setPersonas((current) =>
+        current.map((item) => (item.id === personaDraft.id ? { ...item, memory: '' } : item)),
+      );
+      setPersonaDraft((current) => ({ ...current, memory: '' }));
       if (post) await refreshPost(post.id);
       setSaveStatus('saved');
       window.setTimeout(() => setSaveStatus(''), 1200);
@@ -451,6 +541,10 @@ function App() {
               {copyState === 'copied' ? <Check size={16} /> : <Copy size={16} />}
               {copyState === 'copied' ? 'Copied' : 'Markdown'}
             </button>
+            <button className="ghost-button danger-button" onClick={deleteThread} disabled={!post || isBusy} title="Delete thread">
+              <Trash2 size={16} />
+              Delete
+            </button>
             <button
               className={`icon-button panel-open-button ${settingsOpen ? '' : 'visible'}`}
               onClick={() => setSettingsOpen(true)}
@@ -532,8 +626,11 @@ function App() {
         selectedPersonaId={selectedPersonaId}
         onCouncilChange={updateCouncilDraft}
         onClose={() => setSettingsOpen(false)}
+        onClearPersonaMemory={clearPersonaMemory}
         onPersonaChange={updatePersonaDraft}
         onPersonaSelect={setSelectedPersonaId}
+        onResetCouncil={resetCouncil}
+        onResetPersona={resetPersona}
         onSaveCouncil={saveCouncil}
         onSavePersona={savePersona}
         onToggleCouncilPersona={toggleCouncilPersona}
@@ -609,8 +706,11 @@ function SettingsPanel({
   selectedPersonaId,
   onCouncilChange,
   onClose,
+  onClearPersonaMemory,
   onPersonaChange,
   onPersonaSelect,
+  onResetCouncil,
+  onResetPersona,
   onSaveCouncil,
   onSavePersona,
   onToggleCouncilPersona,
@@ -674,10 +774,16 @@ function SettingsPanel({
               ))}
             </div>
 
-            <button className="save-button" onClick={onSaveCouncil}>
-              <Save size={16} />
-              {saveStatus === 'saved' ? 'Saved' : 'Save council'}
-            </button>
+            <div className="button-row">
+              <button className="save-button" onClick={onSaveCouncil}>
+                <Save size={16} />
+                {saveStatus === 'saved' ? 'Saved' : 'Save council'}
+              </button>
+              <button className="secondary-button" onClick={onResetCouncil}>
+                <RotateCcw size={16} />
+                Reset
+              </button>
+            </div>
           </div>
         )}
       </section>
@@ -763,9 +869,19 @@ function SettingsPanel({
                 rows={4}
               />
             </label>
-            <button className="save-button" onClick={onSavePersona}>
-              <Save size={16} />
-              {saveStatus === 'saved' ? 'Saved' : 'Save persona'}
+            <div className="button-row">
+              <button className="save-button" onClick={onSavePersona}>
+                <Save size={16} />
+                {saveStatus === 'saved' ? 'Saved' : 'Save persona'}
+              </button>
+              <button className="secondary-button" onClick={onResetPersona}>
+                <RotateCcw size={16} />
+                Reset
+              </button>
+            </div>
+            <button className="secondary-button danger-soft-button" onClick={onClearPersonaMemory}>
+              <Eraser size={16} />
+              Clear memory
             </button>
           </div>
         )}
