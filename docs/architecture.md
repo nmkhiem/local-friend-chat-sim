@@ -40,7 +40,7 @@ SQLite connections use a timeout, `PRAGMA busy_timeout`, foreign keys, and WAL m
 
 The backend defaults to `MODEL_PROVIDER=ollama`. Ollama keeps generation fully local and supports pulling models from the UI. The hosted providers use OpenAI-compatible `/v1/chat/completions` endpoints:
 
-- Groq: `MODEL_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_BASE_URL`, and `GROQ_TIMEOUT`.
+- Groq: `MODEL_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_MODEL_OPTIONS`, `GROQ_BASE_URL`, and `GROQ_TIMEOUT`.
 - OpenAI-compatible generic provider: `MODEL_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, and `OPENAI_TIMEOUT`.
 
 API keys are read from backend environment variables only. They are not stored in SQLite and are not sent to the frontend. The `/models` endpoint exposes provider status, current model name, and whether the provider is configured.

@@ -18,12 +18,14 @@ class ApiModelClient:
         env_prefix: str = "OPENAI",
         default_base_url: str = "https://api.openai.com/v1",
         default_model: str = "gpt-4o-mini",
+        default_model_options: tuple[str, ...] | None = None,
     ) -> None:
         self.provider_name = provider_name
         self.env_prefix = env_prefix
         self.base_url = os.getenv(f"{env_prefix}_BASE_URL", default_base_url).rstrip("/")
         self.api_key = os.getenv(f"{env_prefix}_API_KEY", "")
         self.model = os.getenv(f"{env_prefix}_MODEL", default_model)
+        self.default_model_options = default_model_options or (default_model,)
         self.timeout = float(os.getenv(f"{env_prefix}_TIMEOUT", "60"))
 
     def set_model(self, model: str) -> None:
@@ -34,19 +36,21 @@ class ApiModelClient:
 
     async def model_status(self) -> dict[str, Any]:
         configured = bool(self.api_key.strip())
+        models = [
+            {
+                "name": model,
+                "installed": configured,
+                "size": None,
+                "modified_at": None,
+            }
+            for model in self._configured_model_options()
+        ]
         return {
             "base_url": self.base_url,
             "current_model": self.model,
             "connected": configured,
             "api_key_configured": configured,
-            "models": [
-                {
-                    "name": self.model,
-                    "installed": configured,
-                    "size": None,
-                    "modified_at": None,
-                }
-            ],
+            "models": models,
         }
 
     async def generate(self, prompt: str) -> str:
@@ -110,3 +114,13 @@ class ApiModelClient:
             raise ApiModelError(f"{self.provider_name} response did not include text.")
 
         return content.strip()
+
+    def _configured_model_options(self) -> list[str]:
+        raw_options = os.getenv(f"{self.env_prefix}_MODEL_OPTIONS")
+        if raw_options:
+            options = [option.strip() for option in raw_options.split(",") if option.strip()]
+        else:
+            options = list(self.default_model_options)
+        if self.model not in options:
+            options.insert(0, self.model)
+        return options

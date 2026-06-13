@@ -116,18 +116,20 @@ cd backend
 source .venv/bin/activate
 MODEL_PROVIDER=groq \
 GROQ_API_KEY=gsk-your-key \
-GROQ_MODEL=llama-3.3-70b-versatile \
+GROQ_MODEL=llama-3.1-8b-instant \
 uvicorn main:app --reload
 ```
 
 Supported Groq settings:
 
 - `GROQ_API_KEY`, required when using `MODEL_PROVIDER=groq`.
-- `GROQ_MODEL`, default `llama-3.3-70b-versatile`.
+- `GROQ_MODEL`, default `llama-3.1-8b-instant`.
+- `GROQ_MODEL_OPTIONS`, optional comma-separated list shown in the UI.
 - `GROQ_BASE_URL`, default `https://api.groq.com/openai/v1`.
 - `GROQ_TIMEOUT`, default `60`.
 
 The frontend model switcher includes `Groq API` once the backend is restarted.
+If Groq returns HTTP 403 for a model, that model is blocked by your Groq organization or project permissions; choose another model or enable it in Groq settings.
 
 ## OpenAI-Compatible API Provider
 

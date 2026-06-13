@@ -22,7 +22,13 @@ class ModelClient:
             provider_name="Groq API",
             env_prefix="GROQ",
             default_base_url="https://api.groq.com/openai/v1",
-            default_model="llama-3.3-70b-versatile",
+            default_model="llama-3.1-8b-instant",
+            default_model_options=(
+                "llama-3.1-8b-instant",
+                "llama-3.3-70b-versatile",
+                "openai/gpt-oss-20b",
+                "openai/gpt-oss-120b",
+            ),
         )
         self.provider: ProviderName = self._normalize_provider(os.getenv("MODEL_PROVIDER", "ollama"))
 
